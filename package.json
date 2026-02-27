@@ -1,0 +1,21 @@
+{
+  "name": "ai-commit",
+  "version": "0.1.0",
+  "description": "Generate and interactively edit AI commit messages from staged git diff",
+  "type": "module",
+  "main": "generate-commit.js",
+  "scripts": {
+    "start": "node generate-commit.js",
+    "check": "node --check generate-commit.js"
+  },
+  "keywords": [
+    "git",
+    "commit",
+    "ai",
+    "cli"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "openai": "^6.25.0"
+  }
+}
