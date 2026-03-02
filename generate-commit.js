@@ -273,7 +273,7 @@ async function main() {
 
       if (action === "Commit") {
         gitCommitWithMessage(message);
-        return;
+        process.exit(0);
       }
 
       if (action === "Edit") {
