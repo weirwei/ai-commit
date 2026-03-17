@@ -11,7 +11,6 @@ const client = new OpenAI({
   baseURL: process.env.GIT_LLM_BASE_URL, // 关键：换成你的供应商地址
 });
 
-
 function getStagedFiles() {
   return execSync("git diff --cached --name-only", {
     encoding: "utf-8",
@@ -43,11 +42,16 @@ function ensureEnv() {
 }
 
 function trimQuotes(message) {
-  return message.trim().replace(/^["'`]/, "").replace(/["'`]$/, "");
+  return message
+    .trim()
+    .replace(/^["'`]/, "")
+    .replace(/["'`]$/, "");
 }
 
 function gitCommitWithMessage(message) {
-  const result = spawnSync("git", ["commit", "-m", message], { stdio: "inherit" });
+  const result = spawnSync("git", ["commit", "-m", message], {
+    stdio: "inherit",
+  });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
@@ -65,7 +69,9 @@ function gitCommitViaEditor(initialMessage) {
   const editResult = spawnSync("sh", ["-c", editCmd], { stdio: "inherit" });
   if (editResult.status !== 0) process.exit(editResult.status ?? 1);
 
-  const commitResult = spawnSync("git", ["commit", "-F", tempFile], { stdio: "inherit" });
+  const commitResult = spawnSync("git", ["commit", "-F", tempFile], {
+    stdio: "inherit",
+  });
   if (commitResult.status !== 0) process.exit(commitResult.status ?? 1);
 }
 
@@ -95,7 +101,9 @@ async function fallbackChoose() {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = (
     await rl.question("[c]ommit / [e]dit / [r]egenerate / [q]uit: ")
-  ).trim().toLowerCase();
+  )
+    .trim()
+    .toLowerCase();
   rl.close();
   if (answer === "c" || answer === "commit") return "Commit";
   if (answer === "e" || answer === "edit") return "Edit";
@@ -105,7 +113,9 @@ async function fallbackChoose() {
 
 async function fallbackEdit(defaultValue) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = (await rl.question(`Commit message [${defaultValue}]: `)).trim();
+  const answer = (
+    await rl.question(`Commit message [${defaultValue}]: `)
+  ).trim();
   rl.close();
   return answer || defaultValue;
 }
@@ -147,6 +157,7 @@ function promptMenuTUI() {
     const done = (value) => {
       process.stdin.setRawMode(false);
       process.stdin.off("keypress", onKeypress);
+      process.stdin.pause();
       clearLines(renderedLines);
       resolve(value);
     };
@@ -187,6 +198,16 @@ function promptMenuTUI() {
   });
 }
 
+function getRecentCommits(count = 10) {
+  try {
+    return execSync(`git log --format="%s" -n ${count}`, {
+      encoding: "utf-8",
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
 async function generateMessage(diff) {
   const MAX_CHARS = 12000;
   const safeDiff =
@@ -194,21 +215,23 @@ async function generateMessage(diff) {
       ? diff.slice(0, MAX_CHARS) + "\n\n... (truncated)"
       : diff;
 
+  const recentCommits = getRecentCommits();
+
   const response = await client.chat.completions.create({
     model: process.env.GIT_LLM_MODEL,
     messages: [
       {
         role: "system",
-        content: `
-You write concise conventional commit messages.
+        content: `You write concise conventional commit messages.
 
 Rules:
+- Follow the style and language of the recent commit history below
 - One line only
 - Max 72 characters
-- No quotes
-- No explanation
-- No code block
-        `,
+- No quotes, no explanation, no code block
+
+Recent commits:
+${recentCommits}`,
       },
       {
         role: "user",
@@ -264,7 +287,7 @@ async function main() {
       console.log(message);
       console.log("");
 
-      const action = (await promptMenuTUI()) || await fallbackChoose();
+      const action = (await promptMenuTUI()) || (await fallbackChoose());
 
       if (!action || action === "Quit") {
         console.log("👋 Exit without committing.");
@@ -273,7 +296,7 @@ async function main() {
 
       if (action === "Commit") {
         gitCommitWithMessage(message);
-        process.exit(0);
+        return;
       }
 
       if (action === "Edit") {
